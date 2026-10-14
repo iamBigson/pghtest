@@ -1,0 +1,65 @@
+name: Find Leads
+
+on:
+  workflow_dispatch:
+    inputs:
+      keyword:
+        description: 'Keyword (e.g. "luxury private jet charter company")'
+        required: true
+        type: string
+      state:
+        description: 'State (e.g. "Texas")'
+        required: true
+        type: string
+      provider:
+        description: 'Mail provider to find'
+        required: true
+        default: office365
+        type: choice
+        options:
+          - office365
+          - google
+          - random
+
+permissions:
+  contents: write
+
+concurrency:
+  group: find-leads
+  cancel-in-progress: false
+
+jobs:
+  find-leads:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests dnspython
+
+      - name: Run lead finder
+        env:
+          SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          KEYWORD: ${{ inputs.keyword }}
+          STATE: ${{ inputs.state }}
+          PROVIDER: ${{ inputs.provider }}
+        run: python find_leads.py
+
+      - name: Save results and seen domains
+        if: always()
+        run: |
+          mkdir -p results
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add seen_domains.json results
+          git diff --staged --quiet || git commit -m "Run results ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
+          git push
